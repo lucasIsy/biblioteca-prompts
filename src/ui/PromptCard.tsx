@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Media, Prompt, Subcategory } from "../data/repository";
+import { framingStyle } from "../domain/media";
 import { useMediaUrl } from "../hooks/useMediaUrl";
 
 interface Props {
@@ -13,13 +14,14 @@ export function PromptCard({ prompt, cover, subcategories }: Props) {
   const [hover, setHover] = useState(false);
   const thumb = useMediaUrl(cover?.thumbPath);
   const video = useMediaUrl(hover && cover?.kind === "video" ? cover.displayPath : null);
+  const fit = cover ? framingStyle(cover, cover.width, cover.height) : undefined;
   const tag = subcategories.filter((s) => prompt.subcategoryIds.includes(s.id)).map((s) => s.name).join(" · ");
   return (
     <div className="card" onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
       <div className="card-media">
         <div className="card-zoom">
-          {thumb && <img src={thumb} alt="" decoding="async" draggable={false} />}
-          {video && <video src={video} autoPlay muted loop playsInline preload="none" />}
+          {thumb && <img src={thumb} alt="" decoding="async" draggable={false} style={fit} />}
+          {video && <video src={video} style={fit} autoPlay muted loop playsInline preload="none" />}
         </div>
         <div className="card-cap">
           <span className="card-name">{prompt.title}</span>

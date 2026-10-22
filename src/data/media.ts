@@ -9,6 +9,9 @@ import {
   fitWithin, folderOfPath, isImageName, mediaFolder, posterTime, videoMimeFor,
 } from "../domain/media";
 import type { NewMedia } from "./repository";
+import {
+  BROWSER_PREFIX, browserFs, downloadBrowserFile, isTauri, onBrowserDrop, pickBrowserArchive, pickBrowserFiles, readBrowserArchive,
+} from "./browser";
 
 /** Imagem vem de `File` (colar/arrastar na web) ou de caminho absoluto (drag-drop Tauri / dialog). */
 export type MediaSource = File | string;
@@ -27,12 +30,13 @@ async function encode(bitmap: ImageBitmap, max: number, quality: number) {
 
 async function newFolder(): Promise<string> {
   const folder = mediaFolder(crypto.randomUUID());
-  await mkdir(folder, { baseDir: BaseDirectory.AppData, recursive: true });
-  return folder;
+  if (isTauri) await mkdir(folder, { baseDir: BaseDirectory.AppData, recursive: true });
+  return folder; // no navegador a pasta nasce na primeira gravação
 }
 
 async function save(rel: string, bytes: Uint8Array) {
-  await writeFile(rel, bytes, { baseDir: BaseDirectory.AppData });
+  if (isTauri) await writeFile(rel, bytes, { baseDir: BaseDirectory.AppData });
+  else await browserFs.write(rel, bytes);
 }
 
 /** Gera thumb (≈400 px) e display (≤2560 px) em WebP; o original não é guardado. */
@@ -90,14 +94,15 @@ function seek(v: HTMLVideoElement, t: number): Promise<void> {
   });
 }
 
-/** Só MP4 (H.264) e WebM, a partir de caminho absoluto. Copia sem passar pela RAM e gera poster. */
-export async function importVideo(path: string): Promise<NewMedia> {
+/** Só MP4 (H.264) e WebM, a partir de caminho absoluto (ou `File` no navegador). Gera poster e thumb. */
+export async function importVideo(source: MediaSource): Promise<NewMedia> {
+  const path = typeof source === "string" ? source : source.name;
   const mime = videoMimeFor(path);
   if (!mime) throw new Error("Formato de vídeo não suportado: use MP4 (H.264) ou WebM.");
   const probe = document.createElement("video");
   if (!probe.canPlayType(mime)) throw new Error("Este sistema não reproduz esse formato de vídeo.");
 
-  const url = convertFileSrc(path);
+  const url = typeof source === "string" ? convertFileSrc(source) : URL.createObjectURL(source);
   let video: HTMLVideoElement;
   try {
     video = await loadVideo(url);
@@ -120,7 +125,8 @@ export async function importVideo(path: string): Promise<NewMedia> {
     const posterPath = `${folder}/poster.webp`;
     const thumbPath = `${folder}/thumb.webp`;
     try {
-      await copyFile(path, displayPath, { toPathBaseDir: BaseDirectory.AppData });
+      if (typeof source === "string") await copyFile(source, displayPath, { toPathBaseDir: BaseDirectory.AppData });
+      else await save(displayPath, new Uint8Array(await source.arrayBuffer()));
       await save(posterPath, poster.bytes);
       await save(thumbPath, thumb.bytes);
     } catch (e) {
@@ -134,11 +140,13 @@ export async function importVideo(path: string): Promise<NewMedia> {
   } finally {
     video.removeAttribute("src");
     video.load();
+    if (typeof source !== "string") URL.revokeObjectURL(url);
   }
 }
 
 /** Caminho relativo a AppData → URL do asset protocol (sem base64). */
 export async function urlFor(rel: string): Promise<string> {
+  if (!isTauri) return browserFs.url(rel);
   return convertFileSrc(await join(await appDataDir(), rel));
 }
 
@@ -147,7 +155,8 @@ export async function deleteFiles(pathsOrFolders: string[]): Promise<void> {
   const folders = new Set(pathsOrFolders.map((p) => (/\.[a-z0-9]+$/i.test(baseName(p)) ? folderOfPath(p) : p)));
   for (const folder of folders) {
     try {
-      await remove(folder, { baseDir: BaseDirectory.AppData, recursive: true });
+      if (isTauri) await remove(folder, { baseDir: BaseDirectory.AppData, recursive: true });
+      else await browserFs.remove(folder);
     } catch {
       // pasta já ausente: nada a apagar
     }
@@ -156,14 +165,15 @@ export async function deleteFiles(pathsOrFolders: string[]): Promise<void> {
 
 /** Importa por tipo: `File` (colar) é imagem; caminho com .mp4/.webm é vídeo; o resto, imagem. */
 export async function importMedia(source: MediaSource): Promise<NewMedia> {
-  if (typeof source !== "string") return importImage(source);
-  if (videoMimeFor(source)) return importVideo(source);
-  if (!isImageName(source)) throw new Error("Formato não suportado: use imagem (PNG, JPG, WEBP), MP4 (H.264) ou WebM.");
+  const name = typeof source === "string" ? source : source.name;
+  if (videoMimeFor(name)) return importVideo(source);
+  if (typeof source === "string" && !isImageName(source)) throw new Error("Formato não suportado: use imagem (PNG, JPG, WEBP), MP4 (H.264) ou WebM.");
   return importImage(source);
 }
 
-/** Abre o seletor de arquivos do sistema; devolve caminhos absolutos (vazio se cancelar). */
-export async function pickMediaPaths(): Promise<string[]> {
+/** Abre o seletor de arquivos do sistema; devolve caminhos absolutos, ou `File` no navegador (vazio se cancelar). */
+export async function pickMediaPaths(): Promise<MediaSource[]> {
+  if (!isTauri) return pickBrowserFiles("image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.mp4,.webm", true);
   const picked = await open({
     multiple: true,
     filters: [{ name: "Imagem ou vídeo", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "mp4", "webm"] }],
@@ -173,7 +183,8 @@ export async function pickMediaPaths(): Promise<string[]> {
 }
 
 /** Escuta arquivos soltos na janela (drag-drop do Tauri entrega caminhos). Devolve a função que cancela. */
-export async function onFilesDropped(cb: (paths: string[]) => void): Promise<() => void> {
+export async function onFilesDropped(cb: (sources: MediaSource[]) => void): Promise<() => void> {
+  if (!isTauri) return onBrowserDrop(cb);
   return getCurrentWebview().onDragDropEvent((e) => {
     if (e.payload.type === "drop") cb(e.payload.paths);
   });
@@ -190,7 +201,7 @@ export interface BackupFiles {
 }
 
 export const backupFiles: BackupFiles = {
-  readMedia: (rel) => readFile(rel, { baseDir: BaseDirectory.AppData }),
+  readMedia: (rel) => (isTauri ? readFile(rel, { baseDir: BaseDirectory.AppData }) : browserFs.read(rel)),
   async saveMedia(files) {
     const folder = await newFolder();
     const out: Record<string, string> = {};
@@ -210,11 +221,13 @@ export const backupFiles: BackupFiles = {
 
 /** Diálogo "salvar como" do .zip; null se cancelar. */
 export async function pickExportPath(defaultName: string): Promise<string | null> {
+  if (!isTauri) return BROWSER_PREFIX + defaultName; // o navegador baixa o arquivo
   return saveDialog({ defaultPath: defaultName, filters: [{ name: "Backup (.zip)", extensions: ["zip"] }] });
 }
 
 /** Diálogo "abrir" do .zip; null se cancelar. */
 export async function pickArchivePath(): Promise<string | null> {
+  if (!isTauri) return pickBrowserArchive();
   const picked = await open({ multiple: false, filters: [{ name: "Backup (.zip)", extensions: ["zip"] }] });
   return typeof picked === "string" ? picked : null;
 }
@@ -223,12 +236,14 @@ export async function pickArchivePath(): Promise<string | null> {
 export async function writeArchive(absPath: string, files: Record<string, Uint8Array>): Promise<void> {
   const entries: Record<string, [Uint8Array, { level: 0 | 6 }]> = {};
   for (const [name, bytes] of Object.entries(files)) entries[name] = [bytes, { level: name.endsWith(".json") ? 6 : 0 }];
-  await writeFile(absPath, zipSync(entries));
+  const zip = zipSync(entries);
+  if (isTauri) await writeFile(absPath, zip);
+  else downloadBrowserFile(absPath, zip);
 }
 
 export async function readArchive(absPath: string): Promise<Record<string, Uint8Array>> {
   try {
-    return unzipSync(await readFile(absPath));
+    return unzipSync(isTauri ? await readFile(absPath) : await readBrowserArchive(absPath));
   } catch {
     throw new Error("Não foi possível abrir o .zip (arquivo inválido ou corrompido).");
   }
@@ -236,5 +251,6 @@ export async function readArchive(absPath: string): Promise<Record<string, Uint8
 
 /** Pasta da biblioteca (AppData) para mostrar nas configurações. */
 export async function libraryPath(): Promise<string> {
+  if (!isTauri) return ".dev-data (modo navegador)";
   return appDataDir();
 }

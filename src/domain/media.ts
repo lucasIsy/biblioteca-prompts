@@ -11,6 +11,50 @@ export function fitWithin(width: number, height: number, max: number): { width: 
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
 
+/** Enquadramento da capa na carta: zoom sobre o "preencher" (1) e ponto focal (0–1). */
+export interface Framing { fitZoom: number; fitX: number; fitY: number }
+export const DEFAULT_FRAMING: Framing = { fitZoom: 1, fitX: 0.5, fitY: 0.5 };
+export const MIN_ZOOM = 0.3;
+export const MAX_ZOOM = 3;
+export const CARD_RATIO = 0.72;
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+export function clampFraming(f: Partial<Framing>): Framing {
+  const num = (v: number | undefined, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+  return {
+    fitZoom: clamp(num(f.fitZoom, 1), MIN_ZOOM, MAX_ZOOM),
+    fitX: clamp(num(f.fitX, 0.5), 0, 1),
+    fitY: clamp(num(f.fitY, 0.5), 0, 1),
+  };
+}
+
+const pct = (n: number) => `${+n.toFixed(2)}%`;
+
+/**
+ * CSS da imagem dentro da carta. Zoom 1 = "preencher" (como `object-fit: cover`); a caixa da imagem tem o
+ * tamanho real do preenchimento, então zoom < 1 revela a imagem inteira em vez de encolher o recorte.
+ */
+export function framingStyle(f: Partial<Framing>, width: number | null, height: number | null, cardRatio = CARD_RATIO) {
+  const { fitZoom, fitX, fitY } = clampFraming(f);
+  const r = width && height ? width / height : cardRatio;
+  const w = r > cardRatio ? (r / cardRatio) * 100 : 100;
+  const h = r > cardRatio ? 100 : (cardRatio / r) * 100;
+  return {
+    position: "absolute" as const, objectFit: "fill" as const,
+    width: pct(w), height: pct(h), left: pct((100 - w) * fitX), top: pct((100 - h) * fitY),
+    transform: `scale(${+fitZoom.toFixed(3)})`, transformOrigin: `${pct(fitX * 100)} ${pct(fitY * 100)}`,
+  };
+}
+
+/** Zoom que mostra a imagem inteira na carta (relativo ao "preencher"). */
+export function containZoom(width: number | null, height: number | null, cardRatio = CARD_RATIO): number {
+  if (!width || !height) return 1;
+  const r = width / height;
+  const z = r > cardRatio ? cardRatio / r : r / cardRatio;
+  return clamp(z, MIN_ZOOM, 1);
+}
+
 const VIDEO_MIME: Record<string, string> = { mp4: "video/mp4", webm: "video/webm" };
 
 export function extensionOf(name: string): string {

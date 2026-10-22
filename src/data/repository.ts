@@ -1,6 +1,8 @@
 import type { Db } from "./db";
 import { normalize } from "../domain/text";
 import { slugify } from "../domain/categories";
+import { clampFraming } from "../domain/media";
+import type { Framing } from "../domain/media";
 
 export type Layout = "gallery" | "grid";
 export type MediaKind = "image" | "video";
@@ -43,9 +45,12 @@ export interface Media {
   width: number | null;
   height: number | null;
   bytes: number | null;
+  fitZoom: number;
+  fitX: number;
+  fitY: number;
 }
 
-export type NewMedia = Omit<Media, "id" | "promptId">;
+export type NewMedia = Omit<Media, "id" | "promptId" | keyof Framing> & Partial<Framing>;
 
 export class DuplicateNameError extends Error {
   constructor(name: string) {
@@ -69,7 +74,7 @@ export class CategoryNotEmptyError extends Error {
 interface CategoryRow { id: number; name: string; slug: string; layout: Layout; media_kind: MediaKind | null; is_system: number; position: number }
 interface SubRow { id: number; category_id: number; name: string }
 interface PromptRow { id: number; category_id: number | null; title: string; markdown: string; created_at: string; updated_at: string }
-interface MediaRow { id: number; prompt_id: number; kind: MediaKind; thumb_path: string; display_path: string; poster_path: string | null; mime: string; width: number | null; height: number | null; bytes: number | null }
+interface MediaRow { id: number; prompt_id: number; kind: MediaKind; thumb_path: string; display_path: string; poster_path: string | null; mime: string; width: number | null; height: number | null; bytes: number | null; fit_zoom: number; fit_x: number; fit_y: number }
 
 const toCategory = (r: CategoryRow): Category => ({
   id: r.id, name: r.name, slug: r.slug, layout: r.layout, mediaKind: r.media_kind, isSystem: r.is_system === 1, position: r.position,
@@ -78,6 +83,7 @@ const toSub = (r: SubRow): Subcategory => ({ id: r.id, categoryId: r.category_id
 const toMedia = (r: MediaRow): Media => ({
   id: r.id, promptId: r.prompt_id, kind: r.kind, thumbPath: r.thumb_path, displayPath: r.display_path,
   posterPath: r.poster_path, mime: r.mime, width: r.width, height: r.height, bytes: r.bytes,
+  fitZoom: r.fit_zoom, fitX: r.fit_x, fitY: r.fit_y,
 });
 
 export function createRepository(db: Db) {
@@ -223,10 +229,16 @@ export function createRepository(db: Db) {
 
     // ---- mídia (só caminhos relativos e metadados) ----
     async attachMedia(promptId: number, m: NewMedia): Promise<void> {
+      const f = clampFraming(m);
       await db.execute(
-        `INSERT INTO media (prompt_id, kind, thumb_path, display_path, poster_path, mime, width, height, bytes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [promptId, m.kind, m.thumbPath, m.displayPath, m.posterPath, m.mime, m.width, m.height, m.bytes]);
+        `INSERT INTO media (prompt_id, kind, thumb_path, display_path, poster_path, mime, width, height, bytes, fit_zoom, fit_x, fit_y)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [promptId, m.kind, m.thumbPath, m.displayPath, m.posterPath, m.mime, m.width, m.height, m.bytes, f.fitZoom, f.fitX, f.fitY]);
+    },
+
+    async updateMediaFraming(id: number, framing: Partial<Framing>): Promise<void> {
+      const f = clampFraming(framing);
+      await db.execute("UPDATE media SET fit_zoom = ?, fit_x = ?, fit_y = ? WHERE id = ?", [f.fitZoom, f.fitX, f.fitY, id]);
     },
 
     /** Primeira mídia de cada prompt (capa da grade), indexada por prompt. */

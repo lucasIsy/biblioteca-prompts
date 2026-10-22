@@ -4,6 +4,10 @@ Aplicativo desktop para Windows que guarda, organiza e reaproveita seus prompts 
 
 > **Status:** em desenvolvimento (v0.1.0).
 
+## Contribua
+
+Este projeto está sendo desenvolvido com o [Claude Code](https://claude.com/claude-code). Ajudas são sempre bem-vindas: abra uma issue com ideias, bugs ou sugestões, ou envie um pull request.
+
 ## Para que serve
 
 Quem usa IA com frequência acaba com prompts espalhados em notas, chats e pastas. Aqui eles ficam num só lugar, com o resultado ao lado para você lembrar o que cada um produz:

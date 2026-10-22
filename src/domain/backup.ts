@@ -12,6 +12,10 @@ export interface ManifestMedia {
   width: number | null;
   height: number | null;
   bytes: number | null;
+  /** enquadramento da capa; ausente em backups antigos */
+  fitZoom?: number;
+  fitX?: number;
+  fitY?: number;
 }
 
 export interface ManifestPrompt {
@@ -46,6 +50,7 @@ interface SubIn { id: number; categoryId: number; name: string }
 interface MediaIn {
   kind: "image" | "video"; thumbPath: string; displayPath: string; posterPath: string | null;
   mime: string; width: number | null; height: number | null; bytes: number | null;
+  fitZoom: number; fitX: number; fitY: number;
 }
 interface PromptIn {
   id: number; categoryId: number | null; title: string; markdown: string;
@@ -76,6 +81,7 @@ export function buildManifest(
         return {
           kind: m.kind, thumb: m.thumbPath, display: m.displayPath, poster: m.posterPath,
           mime: m.mime, width: m.width, height: m.height, bytes: m.bytes,
+          fitZoom: m.fitZoom, fitX: m.fitX, fitY: m.fitY,
         };
       });
       return {

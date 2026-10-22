@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Media, NewMedia, Prompt } from "../data/repository";
 import { deleteFiles, importMedia, onFilesDropped, pickMediaPaths } from "../data/media";
-import { foldersOfMedia } from "../domain/media";
+import { clampFraming, containZoom, DEFAULT_FRAMING, foldersOfMedia, framingStyle, MAX_ZOOM, MIN_ZOOM } from "../domain/media";
+import type { Framing } from "../domain/media";
 import { categoryHref, promptHref, UNCATEGORIZED_SLUG } from "../domain/routes";
 import { getRepository } from "../hooks/useLibrary";
 import type { Library } from "../hooks/useLibrary";
@@ -28,6 +29,44 @@ function MediaItem({ thumbPath, label, onRemove }: { thumbPath: string; label: s
   );
 }
 
+/** Prévia da carta (0,72): arrastar reposiciona, o controle ajusta o zoom. */
+function FramingEditor({ thumbPath, width, height, value, onChange }: {
+  thumbPath: string; width: number | null; height: number | null; value: Framing; onChange: (f: Framing) => void;
+}) {
+  const url = useMediaUrl(thumbPath);
+  const drag = useRef<{ x: number; y: number; box: DOMRect } | null>(null);
+  const set = (f: Partial<Framing>) => onChange(clampFraming({ ...value, ...f }));
+  return (
+    <div className="field framing">
+      <span className="lbl">Enquadramento do preview</span>
+      <div className="framing-row">
+        <div className="framing-box"
+          onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, box: e.currentTarget.getBoundingClientRect() }; }}
+          onPointerMove={(e) => {
+            const d = drag.current;
+            if (!d) return;
+            set({ fitX: value.fitX - (e.clientX - d.x) / d.box.width, fitY: value.fitY - (e.clientY - d.y) / d.box.height });
+            drag.current = { ...d, x: e.clientX, y: e.clientY };
+          }}
+          onPointerUp={() => { drag.current = null; }}
+          onPointerCancel={() => { drag.current = null; }}>
+          {url && <img src={url} alt="" draggable={false} style={framingStyle(value, width, height)} />}
+        </div>
+        <div className="framing-ctl">
+          <input type="range" min={MIN_ZOOM} max={MAX_ZOOM} step={0.01} value={value.fitZoom}
+            aria-label="Zoom" onChange={(e) => set({ fitZoom: Number(e.target.value) })} />
+          <div className="opts">
+            <button type="button" className="opt" onClick={() => set({ fitZoom: 1 })}>Preencher</button>
+            <button type="button" className="opt" onClick={() => set({ fitZoom: containZoom(width, height), fitX: 0.5, fitY: 0.5 })}>Inteira</button>
+            <button type="button" className="opt" onClick={() => onChange(DEFAULT_FRAMING)}>Redefinir</button>
+          </div>
+          <span className="form-note">Arraste a imagem para posicionar.</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Criar/editar prompt: nome, categoria, subcategorias, markdown (Editar/Visualizar) e mídia. */
 export function PromptForm({ library, prompt, initialCategoryId, onSaved }: Props) {
   const { categories, subcategories, prompts } = library;
@@ -46,6 +85,19 @@ export function PromptForm({ library, prompt, initialCategoryId, onSaved }: Prop
   const addedRef = useRef<NewMedia[]>([]);
   const savedRef = useRef(false);
   addedRef.current = added;
+
+  // Capa = primeira mídia que vai sobrar (as já gravadas vêm antes das novas).
+  const coverExisting = existing[0];
+  const coverAdded = coverExisting ? undefined : added[0];
+  const cover = coverExisting ?? coverAdded;
+  const coverKey = coverExisting ? `e${coverExisting.id}` : coverAdded?.thumbPath ?? "";
+  const [framing, setFraming] = useState<Framing>(DEFAULT_FRAMING);
+  const [framingDirty, setFramingDirty] = useState(false);
+  useEffect(() => {
+    setFraming(coverExisting ? clampFraming(coverExisting) : DEFAULT_FRAMING);
+    setFramingDirty(false);
+  }, [coverKey]); // só quando a capa troca
+  const changeFraming = (f: Framing) => { setFraming(f); setFramingDirty(true); };
 
   const showUncategorized = prompts.some((p) => p.categoryId === null);
   const category = categories.find((c) => c.id === categoryId) ?? null;
@@ -124,7 +176,8 @@ export function PromptForm({ library, prompt, initialCategoryId, onSaved }: Prop
       } else {
         id = await repo.createPrompt(input);
       }
-      for (const m of added) await repo.attachMedia(id, m);
+      if (coverExisting && framingDirty) await repo.updateMediaFraming(coverExisting.id, framing);
+      for (const m of added) await repo.attachMedia(id, m === coverAdded ? { ...m, ...framing } : m);
       savedRef.current = true;
       for (const m of removed) await repo.removeMedia(m.id);
       await deleteFiles(foldersOfMedia(removed));
@@ -157,6 +210,10 @@ export function PromptForm({ library, prompt, initialCategoryId, onSaved }: Prop
             ))}
           </div>
         )}
+        {cover && (
+          <FramingEditor key={coverKey} thumbPath={cover.thumbPath} width={cover.width} height={cover.height}
+            value={framing} onChange={changeFraming} />
+        )}
         <p className="form-note">A mídia é guardada na biblioteca e volta quando você reabrir o app.</p>
       </div>
 
@@ -183,15 +240,19 @@ export function PromptForm({ library, prompt, initialCategoryId, onSaved }: Prop
             </div>
           </div>
 
-          {subs.length > 0 && (
+          {category && (
             <div className="field">
               <span className="lbl">Subcategorias</span>
-              <div className="pills">
-                {subs.map((s) => (
-                  <button key={s.id} type="button" className="pill" aria-pressed={subIds.includes(s.id)}
-                    onClick={() => toggleSub(s.id)}>{s.name}</button>
-                ))}
-              </div>
+              {subs.length > 0 ? (
+                <div className="pills">
+                  {subs.map((s) => (
+                    <button key={s.id} type="button" className="pill" aria-pressed={subIds.includes(s.id)}
+                      onClick={() => toggleSub(s.id)}>{s.name}</button>
+                  ))}
+                </div>
+              ) : (
+                <p className="form-note">Nenhuma subcategoria em {category.name}. Crie em Configurações.</p>
+              )}
             </div>
           )}
 

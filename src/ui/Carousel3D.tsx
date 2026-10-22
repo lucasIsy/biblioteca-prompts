@@ -20,21 +20,22 @@ interface Props {
 }
 
 const arrow = (d: string) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
 );
 
 /**
  * Carrossel 3D cilíndrico. `target` é o índice alvo (cresce sem limite; frente = target mod N) e a posição
  * contínua segue o alvo por uma mola (`springStep`), aplicada direto no DOM a cada quadro.
  * Carta que entra na vista ganha `.is-in`: a mídia volta de 1,12× para 1× e o título sobe com fade (CSS).
- * Só ±6 cartas ao redor da posição atual são montadas. A carta é dimensionada pela altura da janela (`cardSize`).
+ * Só ±6 cartas ao redor da posição atual são montadas. A carta é dimensionada pela altura medida do palco (`cardSize`).
  */
 export function Carousel3D({ prompts, covers, subcategories, focusId, navEnabled = true }: Props) {
   const n = prompts.length;
   const start = () => Math.max(0, prompts.findIndex((p) => p.id === focusId));
   const [target, setTarget] = useState(start);
   const [center, setCenter] = useState(start);
-  const [vh, setVh] = useState(() => window.innerHeight);
+  const [stageH, setStageH] = useState(() => window.innerHeight - 330);
+  const stageEl = useRef<HTMLDivElement>(null);
   const pos = useRef(target);
   const vel = useRef(0);
   const goal = useRef(target);
@@ -43,7 +44,7 @@ export function Carousel3D({ prompts, covers, subcategories, focusId, navEnabled
   const ringEl = useRef<HTMLDivElement>(null);
   const slotEls = useRef(new Map<number, HTMLDivElement>());
 
-  const card = cardSize(vh);
+  const card = cardSize(stageH);
   const s = carouselStep(n);
   const r = carouselRadius(n, card.width);
 
@@ -117,10 +118,15 @@ export function Carousel3D({ prompts, covers, subcategories, focusId, navEnabled
     setCenter(i);
   }, [focusId]); // `prompts`/`n` lidos no momento da troca
 
-  useEffect(() => {
-    const on = () => setVh(window.innerHeight);
-    window.addEventListener("resize", on);
-    return () => { window.removeEventListener("resize", on); cancelAnimationFrame(raf.current); };
+  // O palco ocupa o que sobra da janela (CSS `.app.is-gallery`); se título ou filtros quebram linha, a carta encolhe.
+  useLayoutEffect(() => {
+    const el = stageEl.current;
+    if (!el) return;
+    const measure = () => setStageH(Math.round(el.clientHeight));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => { ro.disconnect(); cancelAnimationFrame(raf.current); };
   }, []);
 
   // Cartas recém-montadas recebem transform/opacidade/`.is-in` antes do primeiro paint.
@@ -145,7 +151,7 @@ export function Carousel3D({ prompts, covers, subcategories, focusId, navEnabled
 
   return (
     <div className="carousel" style={{ "--card-w": `${card.width}px`, "--card-h": `${card.height}px` } as CSSProperties}>
-      <div className="stage">
+      <div className="stage" ref={stageEl}>
         <div className="ring" ref={ringEl}>
           {cards.map(({ k, i }) => {
             const id = prompts[i].id;
@@ -164,9 +170,9 @@ export function Carousel3D({ prompts, covers, subcategories, focusId, navEnabled
         </div>
       </div>
       <div className="carousel-foot">
-        <button type="button" onClick={() => move(-1)} aria-label="Anterior">{arrow("M15 5l-7 7 7 7")}</button>
+        <button type="button" onClick={() => move(-1)} aria-label="Anterior">{arrow("M19 12H5M11 6l-6 6 6 6")}</button>
         <span className="counter">{String(front + 1).padStart(2, "0")} — {String(n).padStart(2, "0")}</span>
-        <button type="button" onClick={() => move(1)} aria-label="Próximo">{arrow("M9 5l7 7-7 7")}</button>
+        <button type="button" onClick={() => move(1)} aria-label="Próximo">{arrow("M5 12h14M13 6l6 6-6 6")}</button>
       </div>
     </div>
   );

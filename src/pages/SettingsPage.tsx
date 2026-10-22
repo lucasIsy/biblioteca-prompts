@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Category, DeleteStrategy } from "../data/repository";
 import { deleteFiles, libraryPath } from "../data/media";
 import { foldersOfMedia } from "../domain/media";
@@ -11,17 +11,25 @@ import { DeleteCategoryDialog } from "../ui/DeleteCategoryDialog";
 interface Props {
   library: Library;
   onChanged: () => Promise<void>;
+  /** vindo de "Criar subcategorias" na barra de filtros: abre a aba dessa categoria */
+  initialCategorySlug?: string | null;
 }
 
 /** Configurações: categorias (CRUD + exclusão com diálogo) e subcategorias por categoria. */
-export function SettingsPage({ library, onChanged }: Props) {
+export function SettingsPage({ library, onChanged, initialCategorySlug }: Props) {
   const { categories, subcategories, prompts } = library;
-  const [subCategoryId, setSubCategoryId] = useState<number | null>(categories[0]?.id ?? null);
+  const [subCategoryId, setSubCategoryId] = useState<number | null>(
+    () => categories.find((c) => c.slug === initialCategorySlug)?.id ?? categories[0]?.id ?? null,
+  );
+  const subsRef = useRef<HTMLElement>(null);
   const [toDelete, setToDelete] = useState<Category | null>(null);
   const [folder, setFolder] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { void libraryPath().then(setFolder).catch(() => {}); }, []);
+  useEffect(() => {
+    if (initialCategorySlug) subsRef.current?.scrollIntoView({ block: "start" });
+  }, [initialCategorySlug]);
   useEffect(() => {
     if (!categories.some((c) => c.id === subCategoryId)) setSubCategoryId(categories[0]?.id ?? null);
   }, [categories, subCategoryId]);
@@ -68,7 +76,7 @@ export function SettingsPage({ library, onChanged }: Props) {
         {error && <p className="form-error" role="alert">{error}</p>}
       </section>
 
-      <section>
+      <section ref={subsRef}>
         <h2 className="settings-h">Subcategorias</h2>
         <div role="tablist" aria-label="Categoria" className="opts center">
           {categories.map((c) => (

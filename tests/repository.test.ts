@@ -25,6 +25,18 @@ describe("repository: prompts e mídia", () => {
     expect(await repo.listMedia(id)).toMatchObject([{ promptId: id, thumbPath: media.thumbPath }]);
   });
 
+  it("enquadramento: padrão, gravar no attach e atualizar", async () => {
+    const { repo } = await setup();
+    const id = await repo.createPrompt({ categoryId: null, title: "T", markdown: "" });
+    await repo.attachMedia(id, media);
+    await repo.attachMedia(id, { ...media, thumbPath: "x", fitZoom: 0.5, fitX: 0.2, fitY: 0.8 });
+    const [a, b] = await repo.listMedia(id);
+    expect(a).toMatchObject({ fitZoom: 1, fitX: 0.5, fitY: 0.5 });
+    expect(b).toMatchObject({ fitZoom: 0.5, fitX: 0.2, fitY: 0.8 });
+    await repo.updateMediaFraming(a.id, { fitZoom: 2, fitX: 0, fitY: 1 });
+    expect((await repo.listCovers()).get(id)).toMatchObject({ fitZoom: 2, fitX: 0, fitY: 1 });
+  });
+
   it("deletar prompt apaga mídia por cascade e devolve ids", async () => {
     const { repo, db } = await setup();
     const id = await repo.createPrompt({ categoryId: null, title: "T", markdown: "" });

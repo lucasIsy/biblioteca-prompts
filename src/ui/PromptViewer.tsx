@@ -85,7 +85,7 @@ export function PromptViewer({ prompt, category, categories, subcategories, show
   // Abrir: a moldura da mídia sai do retângulo da carta e cresce até a metade esquerda.
   useLayoutEffect(() => {
     if (!from || !mediaRef.current || !frameRef.current) return;
-    const m = mediaRef.current.getBoundingClientRect();
+    const m = frameRef.current.getBoundingClientRect();
     const start = { left: from.left - m.left, top: from.top - m.top, width: from.width, height: from.height };
     const a = frameRef.current.animate(
       [frame(start, 22), { offset: 0.7, borderRadius: "22px" }, frame({ left: 0, top: 0, width: m.width, height: m.height }, 0)],
@@ -139,7 +139,7 @@ export function PromptViewer({ prompt, category, categories, subcategories, show
     if (reducedMotion() || !card || !f || !mediaEl) { onUncover(); back(); return; }
     f.getAnimations().forEach((a) => a.cancel());
     setPhase("leaving");
-    const m = mediaEl.getBoundingClientRect(), t = card.getBoundingClientRect();
+    const m = f.getBoundingClientRect(), t = card.getBoundingClientRect();
     const land = { left: t.left - m.left, top: t.top - m.top, width: t.width, height: t.height };
     const alone = { ...land, top: land.top - 56 };
     f.animate(
@@ -166,6 +166,20 @@ export function PromptViewer({ prompt, category, categories, subcategories, show
           {videoUrl && <video src={videoUrl} poster={posterUrl ?? undefined} controls loop muted playsInline />}
           <div className="card-cap" aria-hidden="true"><span className="card-name">{prompt.title}</span></div>
         </div>
+        <div className="actions">
+          <button type="button" className="act" onClick={copy}>{copied ? "Copiado" : "Copiar prompt"}</button>
+          <a href={editHref(prompt.id)} className="act">Editar</a>
+          {confirming ? (
+            <>
+              <button type="button" className="act danger" onClick={remove}>Confirmar exclusão</button>
+              <button type="button" className="act" onClick={() => setConfirming(false)}>Cancelar</button>
+            </>
+          ) : (
+            <button type="button" className="act" onClick={() => setConfirming(true)}>Excluir</button>
+          )}
+          <button type="button" className="act" onClick={close}>Voltar</button>
+          {deleteError && <span className="form-error" role="alert">{deleteError}</span>}
+        </div>
         <Logo />
       </div>
       <div className="viewer-side">
@@ -182,30 +196,16 @@ export function PromptViewer({ prompt, category, categories, subcategories, show
               )}
             </button>
           </div>
+          <dl className="meta">
+            {category && <div><dt>Categoria</dt><dd>{category.name}</dd></div>}
+            {subs && <div><dt>Subcategorias</dt><dd>{subs}</dd></div>}
+          </dl>
           {medias.length > 1 && (
             <div className="thumbs">
               {medias.map((m, i) => i !== active && <Thumb key={m.id} media={m} index={i} onPick={() => setActive(i)} />)}
             </div>
           )}
-          <dl className="meta">
-            {category && <div><dt>Categoria</dt><dd>{category.name}</dd></div>}
-            {subs && <div><dt>Subcategorias</dt><dd>{subs}</dd></div>}
-          </dl>
         </article>
-        <div className="actions">
-          <button type="button" className="act" onClick={copy}>{copied ? "Copiado" : "Copiar prompt"}</button>
-          <a href={editHref(prompt.id)} className="act">Editar</a>
-          {confirming ? (
-            <>
-              <button type="button" className="act danger" onClick={remove}>Confirmar exclusão</button>
-              <button type="button" className="act" onClick={() => setConfirming(false)}>Cancelar</button>
-            </>
-          ) : (
-            <button type="button" className="act" onClick={() => setConfirming(true)}>Excluir</button>
-          )}
-          <button type="button" className="act" onClick={close}>Voltar</button>
-          {deleteError && <span className="form-error" role="alert">{deleteError}</span>}
-        </div>
       </div>
     </div>
     </div>

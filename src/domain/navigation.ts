@@ -48,9 +48,12 @@ export function carouselRadius(length: number, cardWidth = BASE_CARD_WIDTH): num
 
 export const BASE_CARD_WIDTH = 250;
 
-// Tamanho da carta pela altura da janela, para header + título + filtros + carrossel caberem sem rolar.
-export function cardSize(viewportHeight: number): { width: number; height: number } {
-  const height = Math.round(Math.min(520, Math.max(300, viewportHeight - 330)));
+// Folga vertical do palco em volta da carta (sombra e perspectiva).
+export const STAGE_SLACK = 40;
+
+// Tamanho da carta pela altura medida do palco (o que sobra abaixo de header, título e filtros), para nada rolar.
+export function cardSize(stageHeight: number): { width: number; height: number } {
+  const height = Math.round(Math.min(520, Math.max(220, stageHeight - STAGE_SLACK)));
   return { width: Math.round(height * 0.72), height };
 }
 

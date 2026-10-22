@@ -39,6 +39,7 @@ export function CategoryPage({ library, category, focusId, covered = false }: Pr
       <SearchFilters
         query={query} onQuery={setQuery} subcategories={subs}
         selected={selected} onToggle={toggle} onClear={() => setSelected([])}
+        categorySlug={category?.slug ?? null}
       />
       {prompts.length === 0 ? (
         <div className="grid-wrap">

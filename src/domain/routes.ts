@@ -4,7 +4,7 @@ export type Route =
   | { name: "prompt"; id: number }
   | { name: "new"; categorySlug: string | null }
   | { name: "edit"; id: number }
-  | { name: "settings" };
+  | { name: "settings"; categorySlug: string | null };
 
 export const UNCATEGORIZED_SLUG = "sem-categoria";
 
@@ -18,7 +18,7 @@ export function parseHash(hash: string): Route | null {
   if (parts[0] === "p" && /^\d+$/.test(parts[1] ?? "")) return { name: "prompt", id: Number(parts[1]) };
   if (parts[0] === "edit" && /^\d+$/.test(parts[1] ?? "")) return { name: "edit", id: Number(parts[1]) };
   if (parts[0] === "new") return { name: "new", categorySlug: parts[1] ? decodeURIComponent(parts[1]) : null };
-  if (parts[0] === "settings") return { name: "settings" };
+  if (parts[0] === "settings") return { name: "settings", categorySlug: parts[1] ? decodeURIComponent(parts[1]) : null };
   return null;
 }
 
@@ -26,5 +26,7 @@ export const newPromptHref = (categorySlug?: string | null) =>
   categorySlug ? `#/new/${encodeURIComponent(categorySlug)}` : "#/new";
 export const editHref = (id: number) => `#/edit/${id}`;
 export const SETTINGS_HREF = "#/settings";
+/** Configurações com a aba de subcategorias já na categoria `slug`. */
+export const settingsHref = (categorySlug: string) => `${SETTINGS_HREF}/${encodeURIComponent(categorySlug)}`;
 export const categoryHref = (slug: string) => `#/c/${encodeURIComponent(slug)}`;
 export const promptHref = (id: number) => `#/p/${id}`;

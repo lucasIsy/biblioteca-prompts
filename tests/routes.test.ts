@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoryHref, editHref, newPromptHref, parseHash, promptHref, SETTINGS_HREF } from "../src/domain/routes";
+import { categoryHref, editHref, newPromptHref, parseHash, promptHref, SETTINGS_HREF, settingsHref } from "../src/domain/routes";
 
 describe("routes", () => {
   it("lê categoria, prompt e sem categoria", () => {
@@ -20,7 +20,8 @@ describe("routes", () => {
     expect(parseHash(newPromptHref())).toEqual({ name: "new", categorySlug: null });
     expect(parseHash(newPromptHref("sites"))).toEqual({ name: "new", categorySlug: "sites" });
     expect(parseHash(editHref(4))).toEqual({ name: "edit", id: 4 });
-    expect(parseHash(SETTINGS_HREF)).toEqual({ name: "settings" });
+    expect(parseHash(SETTINGS_HREF)).toEqual({ name: "settings", categorySlug: null });
+    expect(parseHash(settingsHref("imagens"))).toEqual({ name: "settings", categorySlug: "imagens" });
     expect(parseHash("#/edit/x")).toBeNull();
   });
 });

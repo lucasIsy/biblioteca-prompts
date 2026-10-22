@@ -7,6 +7,11 @@ import { useHashRoute } from "./hooks/useHashRoute";
 import { useLibrary } from "./hooks/useLibrary";
 import { useEffect, useState } from "react";
 import { UNCATEGORIZED_SLUG } from "./domain/routes";
+import { layoutFor } from "./domain/layout";
+import type { Category } from "./data/repository";
+
+// Galeria ocupa exatamente a janela (o carrossel mede o que sobra); grade rola normalmente.
+const pageClass = (category: Category | null) => (layoutFor(category) === "gallery" ? "app is-gallery" : "app");
 
 export default function App() {
   const route = useHashRoute();
@@ -27,7 +32,7 @@ export default function App() {
       const category = categories.find((c) => c.id === prompt.categoryId) ?? null;
       // A galeria da categoria fica montada por baixo: a mídia voa da carta e volta para ela.
       return (
-        <div className={`app has-viewer${uncovered ? "" : " is-covered"}`}>
+        <div className={`${pageClass(category)} has-viewer${uncovered ? "" : " is-covered"}`}>
           <Header categories={categories} activeSlug={category?.slug ?? UNCATEGORIZED_SLUG} showUncategorized={showUncategorized} newPromptSlug={category?.slug ?? null} />
           <CategoryPage library={data} category={category} focusId={prompt.id} covered />
           <PromptViewer
@@ -58,7 +63,7 @@ export default function App() {
     return (
       <div className="app">
         <Header categories={categories} activeSlug={null} showUncategorized={showUncategorized} settingsActive />
-        <SettingsPage library={data} onChanged={reload} />
+        <SettingsPage library={data} onChanged={reload} initialCategorySlug={route.categorySlug} />
       </div>
     );
   }
@@ -70,7 +75,7 @@ export default function App() {
   const activeSlug = category ? category.slug : "sem-categoria";
 
   return (
-    <div className="app">
+    <div className={pageClass(category ?? null)}>
       <Header categories={categories} activeSlug={activeSlug} showUncategorized={showUncategorized} newPromptSlug={category?.slug ?? null} />
       <CategoryPage library={data} category={category ?? null} />
     </div>

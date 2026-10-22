@@ -1,4 +1,5 @@
 import type { Subcategory } from "../data/repository";
+import { settingsHref } from "../domain/routes";
 
 interface Props {
   query: string;
@@ -7,9 +8,11 @@ interface Props {
   selected: number[];
   onToggle: (id: number) => void;
   onClear: () => void;
+  /** categoria atual; sem subcategorias, a barra aponta para criá-las em Configurações (`null` = Sem categoria) */
+  categorySlug: string | null;
 }
 
-export function SearchFilters({ query, onQuery, subcategories, selected, onToggle, onClear }: Props) {
+export function SearchFilters({ query, onQuery, subcategories, selected, onToggle, onClear, categorySlug }: Props) {
   return (
     <div className="filters">
       <label className="search">
@@ -21,15 +24,16 @@ export function SearchFilters({ query, onQuery, subcategories, selected, onToggl
         </svg>
         <input className="q" type="search" placeholder="Buscar" value={query} onChange={(e) => onQuery(e.target.value)} />
       </label>
-      {subcategories.length > 0 && <span className="sep" aria-hidden="true" />}
-      {subcategories.length > 0 && (
-        <button type="button" className="sub" aria-pressed={selected.length === 0} onClick={onClear}>Todas</button>
-      )}
+      <span className="sep" aria-hidden="true" />
+      <button type="button" className="sub" aria-pressed={selected.length === 0} onClick={onClear}>Todas</button>
       {subcategories.map((s) => (
         <button key={s.id} type="button" className="sub" aria-pressed={selected.includes(s.id)} onClick={() => onToggle(s.id)}>
           {s.name}
         </button>
       ))}
+      {subcategories.length === 0 && categorySlug && (
+        <a className="sub sub-add" href={settingsHref(categorySlug)}>+ Criar subcategorias</a>
+      )}
     </div>
   );
 }

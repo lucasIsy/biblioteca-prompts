@@ -112,9 +112,9 @@ describe("wheelSteps", () => {
 });
 
 describe("tamanho da carta", () => {
-  it("acompanha a altura da janela entre 300 e 520 px", () => {
-    expect(cardSize(800)).toEqual({ width: 338, height: 470 });
-    expect(cardSize(500).height).toBe(300);
+  it("acompanha a altura do palco entre 220 e 520 px", () => {
+    expect(cardSize(510)).toEqual({ width: 338, height: 470 });
+    expect(cardSize(200).height).toBe(220);
     expect(cardSize(1400).height).toBe(520);
   });
   it("raio escala com a largura da carta", () => {

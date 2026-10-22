@@ -1,4 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
+import { browserSql, isTauri } from "./browser";
 import { runMigrations } from "./migrations";
 
 /** Interface mínima de acesso ao SQLite; implementada pelo plugin Tauri (app) e por better-sqlite3 (testes). */
@@ -14,8 +15,22 @@ let instance: Promise<Db> | null = null;
 
 /** Abre o banco do app (uma vez), liga foreign keys e aplica as migrations pendentes. */
 export function getDb(): Promise<Db> {
-  instance ??= openTauriDb();
+  instance ??= isTauri ? openTauriDb() : openBrowserDb();
   return instance;
+}
+
+/** Navegador sem Tauri (`npm run dev`): SQL passa pelo plugin do Vite (better-sqlite3 em `.dev-data/`). */
+async function openBrowserDb(): Promise<Db> {
+  const db: Db = {
+    async execute(sql, params = []) {
+      return (await browserSql("execute", sql, params)) as { lastInsertId: number };
+    },
+    async select<T>(sql: string, params: unknown[] = []) {
+      return (await browserSql("select", sql, params)) as T[];
+    },
+  };
+  await runMigrations(db);
+  return db;
 }
 
 async function openTauriDb(): Promise<Db> {

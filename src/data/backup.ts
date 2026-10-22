@@ -105,6 +105,7 @@ async function importPrompt(
       await repo.attachMedia(id, {
         kind: s.m.kind, thumbPath: s.thumb, displayPath: s.display, posterPath: s.poster,
         mime: s.m.mime, width: s.m.width, height: s.m.height, bytes: s.m.bytes,
+        fitZoom: s.m.fitZoom, fitX: s.m.fitX, fitY: s.m.fitY,
       });
     }
   } catch (e) {

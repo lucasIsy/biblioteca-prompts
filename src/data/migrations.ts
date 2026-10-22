@@ -52,6 +52,11 @@ export const MIGRATIONS: string[][] = [
        ('Apps', 'apps', 'grid', NULL, 0, 3),
        ('Outros', 'outros', 'grid', NULL, 0, 4)`,
   ],
+  [
+    `ALTER TABLE media ADD COLUMN fit_zoom REAL NOT NULL DEFAULT 1`,
+    `ALTER TABLE media ADD COLUMN fit_x REAL NOT NULL DEFAULT 0.5`,
+    `ALTER TABLE media ADD COLUMN fit_y REAL NOT NULL DEFAULT 0.5`,
+  ],
 ];
 
 /**
